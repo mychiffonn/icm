@@ -1,0 +1,82 @@
+[project]
+name = "praxis-sprint-icm"
+version = "0.1.0"
+description = "Internal Coherence Maximization"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "My Chiffon Nguyen", email = "chiffonng136@gmail.com" },
+]
+dependencies = [
+    "dotenv>=0.9.9",
+    "matplotlib>=3.10.7",
+    "numpy>=2.3.5",
+    "openai>=2.8.1",
+    "pre-commit>=4.5.0",
+    "ruff>=0.14.6",
+    "tqdm>=4.67.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"src" = "src"
+
+[tool.ruff]
+src            = ["src"]
+target-version = "py312"
+
+[tool.ruff.format]
+docstring-code-format      = true # format code in docstrings
+docstring-code-line-length = 88
+
+[tool.ruff.lint]
+exclude = ["*.ipynb", "data/*", "logs/*", "tmp/*", "venv/*"]
+extend-select = [
+  "B",   # flake8-bugbear, bugbear checks
+  "D",   # pydocstyle, all functions and classes must have docstrings
+  "I",   # isort
+  "N", # pep8-naming conventions
+  "PL", # pylint
+  "PT",  # flakes8-pytest-style, pytest fixtures and style
+  "PTH", # flake8-use-pathlib, use pathlib instead of os.path
+]
+extend-safe-fixes = [
+  "ANN",  # missing type annotation
+  "D",    # pydocstyle docstrings
+  "DOC",  # pydoclint docstring conventions
+  "F",    # pyflakes
+  "I002", # missing import
+  "ICN",  # import conventions
+  "LOG",  # logging conventions
+  "Q",    # flake8-quotes
+]
+extend-fixable = ["B", "D"]
+ignore = [
+  "T201", # print ok
+  "T203", # print statement ok
+  "F401", # unused imports ok
+  "PLR2004" # pylint numeric constants
+]
+flake8-type-checking.quote-annotations = true
+isort.case-sensitive = true
+pydocstyle.convention = "google"
+pycodestyle.max-doc-length = 88
+
+[tool.ruff.lint.flake8-annotations] # type annotations
+ignore-fully-untyped = true # ignore fully untyped functions
+
+[tool.ruff.lint.per-file-ignores]
+"*/__init__.py" = ["D", "F401"]
+
+[tool.uv]
+python-downloads = "manual"         # change to "automatic" to download Python specified in .python-version
+managed          = true
+
+[tool.uv.pip]
+upgrade-package  = ["ruff", "pre-commit"]
