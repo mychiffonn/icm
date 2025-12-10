@@ -7,16 +7,18 @@ from dataclasses import dataclass
 from typing import Optional
 
 import openai
+from tqdm import tqdm
 
 from src import BASE_MODEL, CHAT_MODEL
 from src.utils import (
     Example,
     construct_few_shot_prompt,
-    extract_label_logprobs,
+    extract_label_probs,
     get_hyperbolic_client,
 )
 
 logger = logging.getLogger(__name__)
+random.seed(42)
 
 
 @dataclass
@@ -154,15 +156,14 @@ class ICMSearch:
                 examples=context, query_example=example, include_query_label=False
             )
 
-            # Get probabilities
-            log_prob_0, log_prob_1 = extract_label_logprobs(
-                self.client, prompt, self.model
-            )
+            # Get normalized probabilities
+            prob_0, prob_1 = extract_label_probs(self.client, prompt, self.model)
 
-            # Get log P(y_i | x_i, context) for the actual label
-            log_prob = log_prob_0 if example.label == 0 else log_prob_1
+            # Get P(y_i | x_i, context) for the actual label
+            prob = prob_0 if example.label == 0 else prob_1
 
-            total_log_prob += log_prob
+            # Compute log probability
+            total_log_prob += math.log(prob)
 
         return total_log_prob
 
@@ -206,7 +207,7 @@ class ICMSearch:
         Follows Algorithm 1 from the paper (without consistency fix):
         1. Sample example x_i from pool
         2. Assign best label: ŷ_i = argmax_y P(y|x,D_{x,y})
-        3. Update D ← D ∪ {(x_i, ŷ_i)}
+        3. Update D ← D ∪ {(x_i, y_i)}
         4. Accept/reject based on utility change
 
         Returns:
@@ -225,18 +226,18 @@ class ICMSearch:
             )
         ]
 
-        # Assign best label: ŷ_i = argmax_y P(y|x, D\{(x,y)})
-        # Get log probabilities for both labels
         prompt = construct_few_shot_prompt(
             examples=temp_dataset,
             query_example=sampled_example,
             include_query_label=False,
         )
 
-        log_prob_0, log_prob_1 = extract_label_logprobs(self.client, prompt, self.model)
+        # Assign best label: ŷ_i = argmax_y P(y|x, D\{(x,y)})
+        # Get normalized probabilities for both labels
+        prob_0, prob_1 = extract_label_probs(self.client, prompt, self.model)
 
-        # Choose label with higher log probability (~ higher probability)
-        best_label = 0 if log_prob_0 > log_prob_1 else 1
+        # Choose label with higher probability
+        best_label = 0 if prob_0 > prob_1 else 1
 
         # Create new labeled example
         new_labeled_example = Example(
@@ -334,7 +335,7 @@ class ICMSearch:
         """Run ICM search with early stopping.
 
         Args:
-            verbose: If True, log progress at INFO level.
+            verbose: If True, show progress bar and log details.
 
         Returns:
             ICMResult with final dataset and history.
@@ -347,24 +348,38 @@ class ICMSearch:
             )
             logger.info(f"Early stopping: patience={self.args.early_stop_patience}")
 
-        for i in range(self.args.max_iterations):
+        pbar = tqdm(
+            range(self.args.max_iterations),
+            desc="ICM Search",
+            disable=not verbose,
+            ncols=100,
+        )
+
+        for i in pbar:
             state = self.step()
 
-            if verbose and (i % 10 == 0 or i == self.args.max_iterations - 1):
-                logger.info(
-                    f"Iteration {i + 1}/{self.args.max_iterations}: "
-                    f"|D|={len(state.dataset)}, "
-                    f"Utility={state.utility_score:.4f}, "
-                    f"Temp={state.temperature:.4f}, "
-                    f"No improvement: {self.iterations_since_improvement}"
+            # Update progress bar
+            if verbose:
+                pbar.set_postfix(
+                    {
+                        "size": len(state.dataset),
+                        "utility": f"{state.utility_score:.3f}",
+                        "best": f"{self.best_utility:.3f}",
+                        "temp": f"{state.temperature:.2f}",
+                        "acc_rate": f"{sum(self.acceptance_history) / len(self.acceptance_history):.0%}",
+                    }
                 )
 
             # Check early stopping
             should_stop, reason = self._should_stop_early()
             if should_stop:
                 if verbose:
+                    pbar.close()
                     logger.info(f"Early stopping at iteration {i + 1}: {reason}")
                 break
+
+        if verbose and not should_stop:
+            pbar.close()
 
         return ICMResult(
             final_dataset=self.current_dataset,

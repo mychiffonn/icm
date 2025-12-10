@@ -11,12 +11,11 @@ from typing import Any, Literal
 import openai
 from dotenv import load_dotenv
 
+from src import BASE_MODEL, BASE_MODEL_CONFIG, CHAT_MODEL, DATA_DIR
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
 
 
 @dataclass
@@ -33,7 +32,7 @@ def read_json(file_path: str | Path) -> list[dict]:
     """Read a JSON file and return a list of dictionaries.
 
     Args:
-        file_path (str | Path): Path to the JSON file, relative to PROJECT_ROOT/data
+        file_path (str | Path): Path to the JSON file, relative to PROJECT_ROOT
 
     Returns:
         list[dict]: List of dictionaries parsed from the file.
@@ -48,10 +47,6 @@ def read_json(file_path: str | Path) -> list[dict]:
         raise FileNotFoundError(f"The file {fpath} does not exist.")
     if not fpath.is_file():
         raise ValueError(f"The path {fpath} is not a file.")
-    if DATA_DIR not in fpath.parents and DATA_DIR != fpath:
-        raise ValueError(
-            f"The file {fpath} is not within the data directory {DATA_DIR}."
-        )
 
     with fpath.open("r", encoding="utf-8") as f:
         return json.load(f)
@@ -178,12 +173,12 @@ def construct_few_shot_prompt(
     return "\n".join(prompt_parts)
 
 
-def extract_label_logprobs(
+def extract_label_probs(
     client: openai.OpenAI,
     prompt: str,
     model: str,
 ) -> tuple[float, float]:
-    """Extract log P(y=0) and log P(y=1) from model response.
+    """Extract normalized P(y=0) and P(y=1) from model response.
 
     Args:
         client: OpenAI-compatible API client.
@@ -191,7 +186,7 @@ def extract_label_logprobs(
         model: Model name (should be base model for raw probabilities).
 
     Returns:
-        Tuple of (log_prob_0, log_prob_1).
+        Tuple of (prob_0, prob_1) normalized to sum to 1.
 
     Raises:
         ValueError: If logprobs cannot be extracted or don't contain "0" or "1".
@@ -200,9 +195,7 @@ def extract_label_logprobs(
         response = client.completions.create(
             model=model,
             prompt=prompt,
-            max_tokens=5,  # Only need "0" or "1"
-            logprobs=5,  # Top 5 token logprobs
-            temperature=0.2,
+            **BASE_MODEL_CONFIG,
             stream=False,
         )
 
@@ -210,28 +203,44 @@ def extract_label_logprobs(
         if not response.choices or not response.choices[0].logprobs:
             raise ValueError("No logprobs returned by API")
 
-        top_logprobs = response.choices[0].logprobs.top_logprobs[0]
+        all_top_logprobs = response.choices[0].logprobs.top_logprobs
 
-        # Look for tokens "0", "1" (with/without leading space)
+        # Try to find tokens in multiple positions (in case of leading space/newline)
         logprob_0 = None
         logprob_1 = None
 
-        for token, logprob in top_logprobs.items():
-            token_stripped = token.strip()
-            if token_stripped == "0":
-                logprob_0 = logprob
-            elif token_stripped == "1":
-                logprob_1 = logprob
+        for position_idx in range(min(2, len(all_top_logprobs))):
+            top_logprobs = all_top_logprobs[position_idx]
+
+            for token, logprob in top_logprobs.items():
+                token_stripped = token.strip()
+                if token_stripped == "0" and logprob_0 is None:
+                    logprob_0 = logprob
+                elif token_stripped == "1" and logprob_1 is None:
+                    logprob_1 = logprob
+
+            # If we found both, break early
+            if logprob_0 is not None and logprob_1 is not None:
+                break
 
         # If exact tokens not found, raise error
         if logprob_0 is None or logprob_1 is None:
-            available_tokens = list(top_logprobs.keys())
+            available_tokens_pos0 = list(all_top_logprobs[0].keys())
             raise ValueError(
                 f"Could not find tokens '0' or '1' in logprobs. "
-                f"Available tokens: {available_tokens}"
+                f"Available tokens at position 0: {available_tokens_pos0}"
             )
 
-        return logprob_0, logprob_1
+        # Convert log probabilities to probabilities
+        prob_0 = math.exp(logprob_0)
+        prob_1 = math.exp(logprob_1)
+
+        # Normalize to sum to 1 (only considering labels 0 and 1)
+        total = prob_0 + prob_1
+        normalized_prob_0 = prob_0 / total
+        normalized_prob_1 = prob_1 / total
+
+        return normalized_prob_0, normalized_prob_1
 
     except Exception as e:
-        raise ValueError(f"Error extracting label logprobs: {e}") from e
+        raise ValueError(f"Error extracting label probabilities: {e}") from e

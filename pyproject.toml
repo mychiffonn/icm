@@ -8,12 +8,13 @@ authors = [
   { name = "My Chiffon Nguyen", email = "chiffonng136@gmail.com" },
 ]
 dependencies = [
-    "dotenv>=0.9.9",
     "matplotlib>=3.10.7",
     "numpy>=2.3.5",
     "openai>=2.8.1",
     "pre-commit>=4.5.0",
+    "python-dotenv>=1.2.1",
     "ruff>=0.14.6",
+    "tenacity>=9.1.2",
     "tqdm>=4.67.1",
 ]
 
@@ -22,10 +23,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-dir]
-"src" = "src"
+where = ["."]
+include = ["src*"]
 
 [tool.ruff]
 src            = ["src"]
