@@ -247,7 +247,9 @@ def predict_label_chat(
         return None
 
     except RetryError:
-        logger.warning("Chat model returned empty response after all retries (RetryError)")
+        logger.warning(
+            "Chat model returned empty response after all retries (RetryError)"
+        )
         return None
     except Exception as e:
         logger.error(f"Error in chat prediction: {e}")
@@ -380,9 +382,7 @@ def evaluate_few_shot_golden(
     logger.info(
         f"Few-Shot Golden: {results['correct']}/{results['total']} = {results['accuracy']:.2%}"
     )
-    save_evaluation_results(
-        results, FEW_SHOT_GOLDEN_RESULT_PATH, "Few-Shot (Golden)"
-    )
+    save_evaluation_results(results, FEW_SHOT_GOLDEN_RESULT_PATH, "Few-Shot (Golden)")
 
     return results
 
@@ -408,11 +408,6 @@ def evaluate_few_shot_icm(
         Dictionary with accuracy, correct count, and total count.
     """
     logger.info("Evaluating Few-Shot with ICM-predicted labels")
-
-    logger.info("Running ICM search on training data...")
-    if icm_args is None:
-        icm_args = ICMArgs(sample_size=8)
-
     icm_search = ICMSearch(pool_data=train_data, model=model, args=icm_args)
     icm_result = icm_search.run(verbose=True)
 

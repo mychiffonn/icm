@@ -7,7 +7,7 @@ Then, run the algorithm on TruthfulQA dataset in data/ folder.
 - `data` folder has truthfulqa_train.json and truthfulqa_test.json, of type list[dict[str, Any]]. Each dict has keys: 'question', 'choices', 'label', 'consistency_id'. `label` can be 0 and 1, where 1 indicates the truthful answer and 0 indicates the false answer.
 - `results` folder to save evaluation results and figures.
 - `src` folder has code files.
-  - `src/__init__.py` can be empty, but I currently have base, chat model names, and generation config there. This information can be moved to `src/config.py` if needed.
+  - `src/__init__.py` contains base, chat model names, and generation config. This information can be moved to `src/config.py` if needed.
   - `src/icm_search.py` should have the core implementation of ICM algorithm.
   - `src/utils.py` should have utility functions for loading data, prompting model, etc, to support `icm_search.py`
   - `src/eval.py` should have evaluation code. See details below.
@@ -29,4 +29,4 @@ For each scenario, calculate the accuracy score on TruthfulQA test set and save 
 Calculate the accuracy scores for all four scenarios on TruthfulQA test set, and plot a bar chart comparing the results. See TruthfulQA subchart of the following figure (Figure 1) from the paper.
 ![](https://arxiv.org/html/2506.10139/extracted/6534182/figures/fig1_llama.png)
 
-The main figure should be output to `figures/truthfulqa_icm.png`.
+The main figure should be output to `results/comparison_figure.png`.
