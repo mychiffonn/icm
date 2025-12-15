@@ -9,7 +9,7 @@ from typing import Optional
 import openai
 from tqdm import tqdm
 
-from src import BASE_MODEL, CHAT_MODEL
+from src import BASE_MODEL, SEED
 from src.utils import (
     Example,
     construct_few_shot_prompt,
@@ -18,7 +18,7 @@ from src.utils import (
 )
 
 logger = logging.getLogger(__name__)
-random.seed(42)
+random.seed(SEED)
 
 
 @dataclass
@@ -28,9 +28,9 @@ class ICMArgs:
     sample_size: Number of examples to sample for initial dataset (K in paper).
     initial_temperature: Starting temperature for simulated annealing (T_0).
     final_temperature: Minimum temperature (T_min).
-    cooling_rate: Cooling rate parameter (β).
+    cooling_rate: Cooling rate parameter (β). Lower values = slower cooling = more exploration.
     max_iterations: Maximum number of search iterations (N).
-    early_stop_patience: Stop if no improvement for this many iterations.
+    early_stop_patience: Stop if no improvement compared to best utility score, for this many iterations.
     early_stop_threshold: Stop if temperature drops below this value.
     """
 
@@ -39,7 +39,7 @@ class ICMArgs:
     final_temperature: float = 0.01
     cooling_rate: float = 0.99
     max_iterations: int = 100
-    early_stop_patience: int = 20
+    early_stop_patience: int = 15
     early_stop_threshold: float = 0.001
 
 
@@ -343,6 +343,7 @@ class ICMSearch:
         if verbose:
             logger.info(f"Starting ICM search with {self.args.sample_size} examples")
             logger.info(f"Max iterations: {self.args.max_iterations}")
+            logger.info(f"Cooling rate (β): {self.args.cooling_rate}")
             logger.info(
                 f"Temperature: {self.args.initial_temperature} -> {self.args.final_temperature}"
             )

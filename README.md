@@ -8,9 +8,17 @@ Task description [here](https://praxis-research.org/sprints/unsupervised-elicita
 
 ![](results/comparison_figure.png)
 
-Two caveats:
+Across four runs for ICM, the accuracy ranged from 56.0% to 60% for 100 examples. All intermediate results are saved in [results/icm_history.json](results/icm_history.json).
 
-- The results may not exactly match the paper's numbers due to: 1) randomness in LLM generation, 2) possible differences in model versions, 3) this ICM version doesn't include logical consistency fix.
+The results may not exactly match the paper's numbers due to:
+
+1. Different models used
+2. In-context learning
+3. Randomness in LLM generation and throughout ICM pipeline
+4. This ICM version doesn't include logical consistency fix.
+
+Other notes:
+
 - Zero-shot with chat model (Llama-3.1-405B-instruct) initially gave lower accuracy (50%) than base model (~65%) since 25-30% of responses were empty and must be skipped when parsing labels. The accuracy was raised after adding retry mechanism for empty response.
 
 ## Set up
@@ -35,16 +43,6 @@ source .venv/bin/activate
 
 ## Replication
 
-### To generate the figure
-
-You can re-generate the main figure from saved results by running
-
-```sh
-uv run src/figure.py
-```
-
-### To run the full pipeline
-
 To run the full pipeline from data loading, ICM prediction, evaluation to figure generation, run
 
 ```sh
@@ -66,3 +64,5 @@ Run with `-h` to see all options, or check [src/main.py](src/main.py) for detail
 ```sh
 uv run src/main.py -h
 ```
+
+CRITICAL: Change seed and other configurations in [src/**init**.py](src/__init__.py) if you want different ICM results. Current seed was used AFTER the reported results.

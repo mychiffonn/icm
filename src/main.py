@@ -16,6 +16,7 @@ from src.eval import (
     evaluate_zero_shot_base,
     evaluate_zero_shot_chat,
 )
+from src.figure import main as generate_figures
 from src.icm_search import ICMArgs
 from src.utils import load_truthqa_data
 
@@ -222,3 +223,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    generate_figures()

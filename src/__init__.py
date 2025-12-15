@@ -1,5 +1,7 @@
 from pathlib import Path
 
+SEED = 47
+
 BASE_MODEL = "meta-llama/Meta-Llama-3.1-405B"
 CHAT_MODEL = "meta-llama/Meta-Llama-3.1-405B-Instruct"
 
@@ -11,7 +13,6 @@ BASE_MODEL_CONFIG = {
     "frequency_penalty": 0.0,  # No penalty for token frequency
     "presence_penalty": 0.0,  # No penalty for token presence
     "logprobs": 5,  # Return top 5 logprobs for probability extraction
-    "max_retries": 5,
 }
 
 CHAT_MODEL_CONFIG = {

@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import random
+from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -23,6 +24,7 @@ from src import (
     FEW_SHOT_GOLDEN_RESULT_PATH,
     FEW_SHOT_ICM_RESULT_PATH,
     RESULTS_DIR,
+    SEED,
     ZERO_SHOT_BASE_RESULT_PATH,
     ZERO_SHOT_CHAT_RESULT_PATH,
 )
@@ -37,6 +39,7 @@ from src.utils import (
 
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+random.seed(SEED)
 
 
 # ============================================================================
@@ -401,49 +404,19 @@ def evaluate_few_shot_icm(
         train_data: Training dataset (ICM will predict labels).
         icm_args: ICM hyperparameters.
         model: Model name.
-        use_cached_icm: If True, try to load cached ICM results.
         show_progress: Whether to show progress bar.
 
     Returns:
         Dictionary with accuracy, correct count, and total count.
     """
     logger.info("Evaluating Few-Shot with ICM-predicted labels")
+
+    # Run ICM search
     icm_search = ICMSearch(pool_data=train_data, model=model, args=icm_args)
     icm_result = icm_search.run(verbose=True)
 
     # Use best dataset as demonstrations
-    icm_cache_path = RESULTS_DIR / "icm_demonstrations.json"
     demonstrations = icm_result.best_dataset
-    with icm_cache_path.open("w") as f:
-        json.dump(
-            [
-                {
-                    "question": ex.question,
-                    "choice": ex.choice,
-                    "label": ex.label,
-                    "consistency_id": ex.consistency_id,
-                }
-                for ex in demonstrations
-            ],
-            f,
-            indent=2,
-        )
-    logger.info(f"Cached ICM demonstrations to {icm_cache_path}")
-
-    # Save ICM history
-    history_path = RESULTS_DIR / "icm_history.json"
-    with history_path.open("w") as f:
-        json.dump(
-            {
-                "utility_history": icm_result.utility_history,
-                "acceptance_history": icm_result.acceptance_history,
-                "best_utility": icm_result.best_utility,
-                "final_utility": icm_result.final_utility,
-            },
-            f,
-            indent=2,
-        )
-    logger.info(f"Saved ICM history to {history_path}")
 
     # Evaluate on test set using ICM demonstrations
     logger.info(
@@ -468,10 +441,65 @@ def evaluate_few_shot_icm(
         show_progress=show_progress,
     )
 
-    # Log and save results
+    # Log results
     logger.info(
         f"Few-Shot ICM: {results['correct']}/{results['total']} = {results['accuracy']:.2%}"
     )
-    save_evaluation_results(results, FEW_SHOT_ICM_RESULT_PATH, "Few-Shot (ICM)")
+
+    # Check if new accuracy is better than existing before saving
+    existing_accuracy = 0.0
+    if FEW_SHOT_ICM_RESULT_PATH.exists():
+        with FEW_SHOT_ICM_RESULT_PATH.open("r") as f:
+            existing_results = json.load(f)
+            existing_accuracy = existing_results.get("accuracy", 0.0)
+        logger.info(f"Existing accuracy: {existing_accuracy:.2%}")
+
+    new_accuracy = results["accuracy"]
+    history_path = RESULTS_DIR / "icm_history.json"
+
+    if new_accuracy > existing_accuracy:
+        logger.info(
+            f"New accuracy ({new_accuracy:.2%}) > existing ({existing_accuracy:.2%}). Saving results..."
+        )
+
+        # Save complete ICM history (args + results + best_dataset)
+        with history_path.open("w") as f:
+            json.dump(
+                {
+                    "status": "completed",
+                    "icm_args": asdict(icm_args),
+                    "best_utility": icm_result.best_utility,
+                    "final_utility": icm_result.final_utility,
+                    "total_iterations": len(icm_result.utility_history),
+                    "best_dataset_size": len(icm_result.best_dataset),
+                    "final_dataset_size": len(icm_result.final_dataset),
+                    "acceptance_rate": sum(icm_result.acceptance_history)
+                    / len(icm_result.acceptance_history)
+                    if icm_result.acceptance_history
+                    else 0,
+                    "utility_history": icm_result.utility_history,
+                    "acceptance_history": icm_result.acceptance_history,
+                    "best_dataset": [
+                        {
+                            "question": ex.question,
+                            "choice": ex.choice,
+                            "label": ex.label,
+                            "consistency_id": ex.consistency_id,
+                        }
+                        for ex in demonstrations
+                    ],
+                },
+                f,
+                indent=2,
+            )
+        logger.info(f"Saved ICM history to {history_path}")
+
+        # Save evaluation results
+        save_evaluation_results(results, FEW_SHOT_ICM_RESULT_PATH, "Few-Shot (ICM)")
+    else:
+        logger.info(
+            f"New accuracy ({new_accuracy:.2%}) <= existing ({existing_accuracy:.2%}). "
+            "Skipping save to preserve better results."
+        )
 
     return results
